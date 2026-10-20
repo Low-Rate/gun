@@ -277,7 +277,12 @@
             reloadStartTime: 0,
             moveSpeed: 0.14,  // 降低基础速度
             sprintMultiplier: 1.8,  // 降低冲刺倍率
-            isSprinting: false
+            isSprinting: false,
+            isADS: false,           // 开镜状态
+            adsFOV: 40,             // 开镜FOV
+            normalFOV: 75,          // 正常FOV
+            currentFOV: 75,         // 当前FOV（用于插值）
+            isFiring: false         // 连射状态
         };
 
         // 准星散布状态
@@ -296,8 +301,9 @@
                 id: 'rifle',
                 name: '突击步枪',
                 spread: { base: 4, move: 18, sprint: 32 },
+                adsSpread: 1.5,
                 damageMultiplier: 1.0,
-                fireRate: 150,
+                fireRate: 120,
                 maxAmmo: 30,
                 reloadTime: 2000,
                 recoil: { x: 0.02, y: 0.03 },
@@ -306,8 +312,9 @@
             {
                 id: 'smg',
                 name: '冲锋枪',
-                spread: { base: 8, move: 25, sprint: 40 },
-                damageMultiplier: 0.7,
+                spread: { base: 3, move: 12, sprint: 25 },
+                adsSpread: 2,
+                damageMultiplier: 0.5,
                 fireRate: 80,
                 maxAmmo: 50,
                 reloadTime: 1500,
@@ -317,8 +324,9 @@
             {
                 id: 'sniper',
                 name: '狙击枪',
-                spread: { base: 2, move: 15, sprint: 30 },
-                damageMultiplier: 2.5,
+                spread: { base: 20, move: 35, sprint: 50 },
+                adsSpread: 0,
+                damageMultiplier: 3.0,
                 fireRate: 1200,
                 maxAmmo: 5,
                 reloadTime: 3000,
@@ -328,13 +336,16 @@
             {
                 id: 'shotgun',
                 name: '霰弹枪',
-                spread: { base: 12, move: 30, sprint: 45 },
-                damageMultiplier: 1.5,
+                spread: { base: 15, move: 35, sprint: 50 },
+                adsSpread: 10,
+                damageMultiplier: 0.3,
                 fireRate: 800,
                 maxAmmo: 8,
                 reloadTime: 2500,
                 recoil: { x: 0.03, y: 0.05 },
-                color: '#ffaa00'
+                color: '#ffaa00',
+                pellets: 8,
+                pelletSpread: 8
             }
         ];
 
@@ -516,6 +527,11 @@
         // 切换武器
         function switchWeapon(index) {
             if (index < 0 || index >= WEAPONS.length || index === currentWeaponIndex) return;
+
+            // 切换武器时退出开镜
+            if (gameState.isADS) {
+                gameState.isADS = false;
+            }
 
             // 隐藏当前武器
             weaponGroups[currentWeaponIndex].visible = false;
@@ -1053,7 +1069,26 @@
 
             document.addEventListener('mousedown', (e) => {
                 if (e.button === 0 && controls.isLocked && !gameState.isGameOver) {
-                    shoot();
+                    // 步枪和冲锋枪支持连发
+                    if (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg') {
+                        gameState.isFiring = true;
+                    } else {
+                        shoot();
+                    }
+                }
+                // 右键开镜
+                if (e.button === 2 && controls.isLocked && !gameState.isGameOver && !gameState.isReloading) {
+                    const weapon = currentWeapon;
+                    // 只有当武器有adsSpread且adsSpread小于baseSpread时才允许开镜
+                    if (weapon.adsSpread !== undefined && weapon.adsSpread < weapon.spread.base) {
+                        gameState.isADS = !gameState.isADS;
+                    }
+                }
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if (e.button === 0) {
+                    gameState.isFiring = false;
                 }
             });
 
@@ -1074,13 +1109,29 @@
 
         // 动态准星绘制
         function drawCrosshair(delta) {
-            // 确定目标散布
+            // 处理开镜FOV插值
+            const targetFOV = gameState.isADS ? gameState.adsFOV : gameState.normalFOV;
+            gameState.currentFOV += (targetFOV - gameState.currentFOV) * 15 * delta;
+            camera.fov = gameState.currentFOV;
+            camera.updateProjectionMatrix();
+
+            // 确定目标散布 - 开镜时使用adsSpread
+            let baseSpread = crosshairState.baseSpread;
+            let moveSpread = crosshairState.moveSpread;
+            let sprintSpread = crosshairState.sprintSpread;
+
+            if (gameState.isADS && currentWeapon.adsSpread !== undefined) {
+                baseSpread = currentWeapon.adsSpread;
+                moveSpread = currentWeapon.adsSpread * 1.5;  // 开镜移动散布略大
+                sprintSpread = currentWeapon.adsSpread * 2;  // 开镜冲刺散布更大
+            }
+
             if (gameState.isSprinting) {
-                crosshairState.targetSpread = crosshairState.sprintSpread;
+                crosshairState.targetSpread = sprintSpread;
             } else if (isMoving) {
-                crosshairState.targetSpread = crosshairState.moveSpread;
+                crosshairState.targetSpread = moveSpread;
             } else {
-                crosshairState.targetSpread = crosshairState.baseSpread;
+                crosshairState.targetSpread = baseSpread;
             }
 
             // 平滑插值
@@ -1088,7 +1139,11 @@
 
             // 更新散布文字
             const spreadText = document.getElementById('spread-indicator');
-            if (crosshairState.currentSpread < 8) {
+            if (gameState.isADS) {
+                spreadText.textContent = '开镜中...';
+                spreadText.style.color = '#ff0066';
+                spreadText.style.textShadow = '0 0 8px #ff0066';
+            } else if (crosshairState.currentSpread < 8) {
                 spreadText.textContent = '散布: 精准';
                 spreadText.style.color = '#00ff88';
                 spreadText.style.textShadow = '0 0 8px #00ff88';
@@ -1116,90 +1171,125 @@
             const glowColor = 'rgba(0, 255, 136, 0.6)';
             const outerColor = 'rgba(0, 255, 136, 0.4)';
 
-            crosshairCtx.lineWidth = thickness;
-            crosshairCtx.lineCap = 'round';
-            crosshairCtx.strokeStyle = mainColor;
-            crosshairCtx.shadowColor = '#00ff88';
-            crosshairCtx.shadowBlur = 8;
-
-            // 四个方向的主准星线
-            // 上
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center, center - gap);
-            crosshairCtx.lineTo(center, center - gap - length);
-            crosshairCtx.stroke();
-
-            // 下
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center, center + gap);
-            crosshairCtx.lineTo(center, center + gap + length);
-            crosshairCtx.stroke();
-
-            // 左
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center - gap, center);
-            crosshairCtx.lineTo(center - gap - length, center);
-            crosshairCtx.stroke();
-
-            // 右
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center + gap, center);
-            crosshairCtx.lineTo(center + gap + length, center);
-            crosshairCtx.stroke();
-
-            // 外侧括号（表示散布范围）
-            crosshairCtx.strokeStyle = outerColor;
-            crosshairCtx.lineWidth = 1.5;
-            crosshairCtx.shadowBlur = 4;
-
-            const bracketOffset = gap + length + 4;
-            const bracketSize = 6;
-
-            // 左上括号
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center - bracketOffset, center - bracketOffset - bracketSize);
-            crosshairCtx.lineTo(center - bracketOffset, center - bracketOffset);
-            crosshairCtx.lineTo(center - bracketOffset + bracketSize, center - bracketOffset);
-            crosshairCtx.stroke();
-
-            // 右上括号
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center + bracketOffset + bracketSize, center - bracketOffset);
-            crosshairCtx.lineTo(center + bracketOffset, center - bracketOffset);
-            crosshairCtx.lineTo(center + bracketOffset, center - bracketOffset - bracketSize);
-            crosshairCtx.stroke();
-
-            // 左下括号
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center - bracketOffset, center + bracketOffset + bracketSize);
-            crosshairCtx.lineTo(center - bracketOffset, center + bracketOffset);
-            crosshairCtx.lineTo(center - bracketOffset + bracketSize, center + bracketOffset);
-            crosshairCtx.stroke();
-
-            // 右下括号
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(center + bracketOffset + bracketSize, center + bracketOffset);
-            crosshairCtx.lineTo(center + bracketOffset, center + bracketOffset);
-            crosshairCtx.lineTo(center + bracketOffset, center + bracketOffset + bracketSize);
-            crosshairCtx.stroke();
-
-            // 中心点
-            crosshairCtx.fillStyle = mainColor;
-            crosshairCtx.shadowBlur = 10;
-            crosshairCtx.beginPath();
-            crosshairCtx.arc(center, center, 1.5, 0, Math.PI * 2);
-            crosshairCtx.fill();
-
-            // 撒布圆圈（可选：显示预估散布范围）
-            if (spread > 10) {
-                crosshairCtx.strokeStyle = 'rgba(255, 100, 100, 0.3)';
+            // 开镜时显示简单的准星（单点或简单十字）
+            if (gameState.isADS && currentWeapon.id === 'sniper') {
+                // 狙击镜准星：简单的十字线 + 中心点
+                crosshairCtx.strokeStyle = '#ff0066';
                 crosshairCtx.lineWidth = 1;
-                crosshairCtx.shadowBlur = 0;
-                crosshairCtx.setLineDash([4, 4]);
+                crosshairCtx.shadowColor = '#ff0066';
+                crosshairCtx.shadowBlur = 6;
+
+                // 细十字线
                 crosshairCtx.beginPath();
-                crosshairCtx.arc(center, center, spread * 1.2, 0, Math.PI * 2);
+                crosshairCtx.moveTo(center, 0);
+                crosshairCtx.lineTo(center, crosshairSize);
+                crosshairCtx.moveTo(0, center);
+                crosshairCtx.lineTo(crosshairSize, center);
+                crosshairCtx.stroke();
+
+                // 中心点
+                crosshairCtx.fillStyle = '#ff0066';
+                crosshairCtx.shadowBlur = 10;
+                crosshairCtx.beginPath();
+                crosshairCtx.arc(center, center, 2, 0, Math.PI * 2);
+                crosshairCtx.fill();
+
+                // 可选：添加测距标记
+                crosshairCtx.strokeStyle = 'rgba(255, 0, 102, 0.3)';
+                crosshairCtx.lineWidth = 0.5;
+                crosshairCtx.setLineDash([10, 10]);
+                crosshairCtx.beginPath();
+                crosshairCtx.arc(center, center, 40, 0, Math.PI * 2);
                 crosshairCtx.stroke();
                 crosshairCtx.setLineDash([]);
+
+            } else {
+                // 普通准星
+                crosshairCtx.lineWidth = thickness;
+                crosshairCtx.lineCap = 'round';
+                crosshairCtx.strokeStyle = mainColor;
+                crosshairCtx.shadowColor = '#00ff88';
+                crosshairCtx.shadowBlur = 8;
+
+                // 四个方向的主准星线
+                // 上
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center, center - gap);
+                crosshairCtx.lineTo(center, center - gap - length);
+                crosshairCtx.stroke();
+
+                // 下
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center, center + gap);
+                crosshairCtx.lineTo(center, center + gap + length);
+                crosshairCtx.stroke();
+
+                // 左
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center - gap, center);
+                crosshairCtx.lineTo(center - gap - length, center);
+                crosshairCtx.stroke();
+
+                // 右
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center + gap, center);
+                crosshairCtx.lineTo(center + gap + length, center);
+                crosshairCtx.stroke();
+
+                // 外侧括号（表示散布范围）
+                crosshairCtx.strokeStyle = outerColor;
+                crosshairCtx.lineWidth = 1.5;
+                crosshairCtx.shadowBlur = 4;
+
+                const bracketOffset = gap + length + 4;
+                const bracketSize = 6;
+
+                // 左上括号
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center - bracketOffset, center - bracketOffset - bracketSize);
+                crosshairCtx.lineTo(center - bracketOffset, center - bracketOffset);
+                crosshairCtx.lineTo(center - bracketOffset + bracketSize, center - bracketOffset);
+                crosshairCtx.stroke();
+
+                // 右上括号
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center + bracketOffset + bracketSize, center - bracketOffset);
+                crosshairCtx.lineTo(center + bracketOffset, center - bracketOffset);
+                crosshairCtx.lineTo(center + bracketOffset, center - bracketOffset - bracketSize);
+                crosshairCtx.stroke();
+
+                // 左下括号
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center - bracketOffset, center + bracketOffset + bracketSize);
+                crosshairCtx.lineTo(center - bracketOffset, center + bracketOffset);
+                crosshairCtx.lineTo(center - bracketOffset + bracketSize, center + bracketOffset);
+                crosshairCtx.stroke();
+
+                // 右下括号
+                crosshairCtx.beginPath();
+                crosshairCtx.moveTo(center + bracketOffset + bracketSize, center + bracketOffset);
+                crosshairCtx.lineTo(center + bracketOffset, center + bracketOffset);
+                crosshairCtx.lineTo(center + bracketOffset, center + bracketOffset + bracketSize);
+                crosshairCtx.stroke();
+
+                // 中心点
+                crosshairCtx.fillStyle = mainColor;
+                crosshairCtx.shadowBlur = 10;
+                crosshairCtx.beginPath();
+                crosshairCtx.arc(center, center, 1.5, 0, Math.PI * 2);
+                crosshairCtx.fill();
+
+                // 撒布圆圈（可选：显示预估散布范围）
+                if (spread > 10) {
+                    crosshairCtx.strokeStyle = 'rgba(255, 100, 100, 0.3)';
+                    crosshairCtx.lineWidth = 1;
+                    crosshairCtx.shadowBlur = 0;
+                    crosshairCtx.setLineDash([4, 4]);
+                    crosshairCtx.beginPath();
+                    crosshairCtx.arc(center, center, spread * 1.2, 0, Math.PI * 2);
+                    crosshairCtx.stroke();
+                    crosshairCtx.setLineDash([]);
+                }
             }
         }
 
@@ -1220,20 +1310,17 @@
 
             showMuzzleFlash();
 
-            // 计算散布偏移 - 使用当前武器的散布值
-            const spreadRad = (crosshairState.currentSpread / 128) * (Math.PI / 180) * 4; // 转换为弧度
-            const spreadX = (Math.random() - 0.5) * spreadRad * 2;
-            const spreadY = (Math.random() - 0.5) * spreadRad * 2;
+            // 获取弹丸数量（霰弹枪多发，其他单发）
+            const pelletCount = currentWeapon.pellets || 1;
+            const isShotgun = currentWeapon.id === 'shotgun';
+            const pelletConeSpread = currentWeapon.pelletSpread || 0; // 霰弹枪的锥形散布角度
 
-            // 创建带散布的射线
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity();
-            tempMatrix.makeRotationFromEuler(new THREE.Euler(spreadY, spreadX, 0, 'YXZ'));
+            // 基础散布（来自准星状态）
+            const baseSpreadRad = (crosshairState.currentSpread / 128) * (Math.PI / 180) * 4;
+            // 霰弹枪额外锥形散布
+            const pelletSpreadRad = (pelletConeSpread / 128) * (Math.PI / 180) * 4;
 
             const rayOrigin = camera.getWorldPosition(new THREE.Vector3());
-            const rayDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).applyQuaternion(camera.quaternion).normalize();
-
-            raycaster.set(rayOrigin, rayDir);
 
             // 准备所有可击中的对象
             const targetMeshes = [];
@@ -1242,38 +1329,86 @@
                     t.userData.hitBoxes.forEach(hb => targetMeshes.push(hb.mesh));
                 }
             });
-
-            const environmentMeshes = obstacles; // 障碍物和墙体
-
+            const environmentMeshes = obstacles;
             const allMeshes = [...targetMeshes, ...environmentMeshes];
-            const intersects = raycaster.intersectObjects(allMeshes, true);
 
-            const endPoint = intersects.length > 0 ? intersects[0].point : rayOrigin.clone().add(rayDir.multiplyScalar(100));
-            createBulletTrail(rayOrigin, endPoint);
+            // 记录是否有击中靶子（用于墙体效果）
+            let anyTargetHit = false;
+            let firstHitPoint = null;
+            let firstHitNormal = null;
 
-            if (intersects.length > 0) {
-                const hit = intersects[0];
-                let isTargetHit = false;
+            // 为每个弹丸发射射线
+            for (let p = 0; p < pelletCount; p++) {
+                // 计算每个弹丸的散布
+                let spreadX, spreadY;
 
-                // 检查是否击中靶子
-                for (const target of targets) {
-                    if (target.userData.hitBoxes) {
-                        for (const hb of target.userData.hitBoxes) {
-                            if (hb.mesh === hit.object || (hb.mesh.parent && hb.mesh.parent === hit.object)) {
-                                isTargetHit = true;
-                                hitTarget(target, hit.point, hb.multiplier, hb.part);
-                                break;
+                if (isShotgun) {
+                    // 霰弹枪：基础散布 + 锥形额外散布
+                    const totalSpreadRad = baseSpreadRad + pelletSpreadRad;
+                    spreadX = (Math.random() - 0.5) * totalSpreadRad * 2;
+                    spreadY = (Math.random() - 0.5) * totalSpreadRad * 2;
+                } else if (gameState.isADS && currentWeapon.id === 'sniper') {
+                    // 狙击枪开镜：零散布
+                    spreadX = 0;
+                    spreadY = 0;
+                } else {
+                    // 其他武器：使用准星散布
+                    spreadX = (Math.random() - 0.5) * baseSpreadRad * 2;
+                    spreadY = (Math.random() - 0.5) * baseSpreadRad * 2;
+                }
+
+                // 创建带散布的射线
+                const tempMatrix = new THREE.Matrix4();
+                tempMatrix.identity();
+                tempMatrix.makeRotationFromEuler(new THREE.Euler(spreadY, spreadX, 0, 'YXZ'));
+
+                const rayDir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).applyQuaternion(camera.quaternion).normalize();
+                raycaster.set(rayOrigin, rayDir);
+
+                const intersects = raycaster.intersectObjects(allMeshes, true);
+
+                const endPoint = intersects.length > 0 ? intersects[0].point : rayOrigin.clone().add(rayDir.clone().multiplyScalar(100));
+
+                // 只为第一个弹丸创建弹道轨迹（避免过多视觉效果）
+                if (p === 0) {
+                    createBulletTrail(rayOrigin, endPoint);
+                }
+
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    let isTargetHit = false;
+
+                    // 检查是否击中靶子
+                    for (const target of targets) {
+                        if (target.userData.hitBoxes) {
+                            for (const hb of target.userData.hitBoxes) {
+                                if (hb.mesh === hit.object || (hb.mesh.parent && hb.mesh.parent === hit.object)) {
+                                    isTargetHit = true;
+                                    anyTargetHit = true;
+
+                                    // 霰弹枪每发弹丸伤害 = 基础伤害 * damageMultiplier / 弹丸数
+                                    // 其他武器正常计算
+                                    const pelletMultiplier = isShotgun ? (1 / pelletCount) : 1;
+                                    hitTarget(target, hit.point, hb.multiplier * pelletMultiplier, hb.part);
+                                    break;
+                                }
                             }
+                            if (isTargetHit) break;
                         }
-                        if (isTargetHit) break;
+                    }
+
+                    // 记录第一个击中点用于墙体效果
+                    if (!isTargetHit && firstHitPoint === null) {
+                        firstHitPoint = hit.point;
+                        firstHitNormal = hit.face ? hit.face.normal : undefined;
                     }
                 }
+            }
 
-                // 如果没击中靶子，则击中环境
-                if (!isTargetHit) {
-                    createWallImpact(hit.point, hit.face ? hit.face.normal : undefined);
-                    createWallDecal(hit.point, hit.face ? hit.face.normal : undefined);
-                }
+            // 如果没有击中任何靶子，在第一个击中点创建墙体效果
+            if (!anyTargetHit && firstHitPoint !== null) {
+                createWallImpact(firstHitPoint, firstHitNormal);
+                createWallDecal(firstHitPoint, firstHitNormal);
             }
 
             applyRecoil();
@@ -1813,6 +1948,11 @@
             gameState.isPaused = false;
             gameState.isReloading = false;
             gameState.isSprinting = false;
+            gameState.isADS = false;
+            gameState.isFiring = false;
+            gameState.currentFOV = gameState.normalFOV;
+            camera.fov = gameState.normalFOV;
+            camera.updateProjectionMatrix();
             updateSprintIndicator();
 
             // 重置武器状态
@@ -1875,10 +2015,18 @@
             requestAnimationFrame(animate);
 
             const delta = clock.getDelta();
+            const now = Date.now();
 
             if (!gameState.isPaused && !gameState.isGameOver) {
                 updateMovement(delta);
                 updateTargets(delta);
+
+                // 连发逻辑：步枪和冲锋枪按住左键持续射击
+                if (gameState.isFiring && (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg')) {
+                    if (now - gameState.lastShot >= gameState.fireRate) {
+                        shoot();
+                    }
+                }
             }
             updateParticles(delta);
             drawCrosshair(delta);
