@@ -572,7 +572,7 @@
             const bodyGeometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
             const bodyMaterial = new THREE.MeshBasicMaterial({ visible: false });
             playerBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            playerBody.position.set(0, 1.6, 0);
+            playerBody.position.set(0, 1.6, 10);
             scene.add(playerBody);
 
             // 创建所有武器模型
@@ -2307,8 +2307,8 @@
             });
             bulletDecals = [];
 
-            playerBody.position.set(0, 1.6, 0);
-            camera.position.set(0, 1.6, 0);
+            playerBody.position.set(0, 1.6, 10);
+            camera.position.set(0, 1.6, 10);
             camera.rotation.set(0, 0, 0);
 
             setupTargets();
