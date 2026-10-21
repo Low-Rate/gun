@@ -381,6 +381,9 @@
             normalFOV: 75,          // 正常FOV
             currentFOV: 75,         // 当前FOV（用于插值）
             isFiring: false,        // 连射状态
+            isJumping: false,       // 跳跃状态
+            isGrounded: true,       // 是否着地
+            jumpVelocity: 0,        // 跳跃垂直速度
             difficulty: 'normal',   // 难度: easy, normal, hard, expert
             difficultySettings: {   // 难度配置
                 easy: { targetHealth: 2, speedMin: 0.3, speedMax: 1.0, targetCount: 8, scoreMultiplier: 0.8 },
@@ -396,6 +399,7 @@
             baseSpread: 4,      // 静止时基础散布
             moveSpread: 18,     // 移动时散布
             sprintSpread: 32,   // 冲刺时散布
+            jumpSpreadMultiplier: 6, // 跳跃时散布倍率（基础散布的6倍）
             currentSpread: 4,   // 当前散布
             targetSpread: 4,    // 目标散布
             lerpSpeed: 12       // 插值速度
@@ -1195,6 +1199,12 @@
                 if (key === 'escape') {
                     if (controls.isLocked) controls.unlock();
                 }
+                // 空格跳跃
+                if (key === ' ' && gameState.isGrounded && controls.isLocked && !gameState.isGameOver) {
+                    gameState.isJumping = true;
+                    gameState.isGrounded = false;
+                    gameState.jumpVelocity = 0.28; // 跳跃初始速度
+                }
             });
 
             document.addEventListener('keyup', (e) => {
@@ -1270,7 +1280,15 @@
                 sprintSpread = currentWeapon.adsSpread * 2;  // 开镜冲刺散布更大
             }
 
-            if (gameState.isSprinting) {
+            // 跳跃时散布更大 - 基于当前武器的基础散布 * 倍率
+            let jumpSpread = crosshairState.baseSpread * crosshairState.jumpSpreadMultiplier;
+            if (gameState.isADS && currentWeapon.adsSpread !== undefined) {
+                jumpSpread = currentWeapon.adsSpread * 4;  // 开镜跳跃散布（ADS基础的4倍）
+            }
+
+            if (gameState.isJumping) {
+                crosshairState.targetSpread = jumpSpread;
+            } else if (gameState.isSprinting) {
                 crosshairState.targetSpread = sprintSpread;
             } else if (isMoving) {
                 crosshairState.targetSpread = moveSpread;
@@ -1908,9 +1926,28 @@
             if (keys.a) move.sub(right);
             if (keys.d) move.add(right);
 
-            // 检测是否在移动
+            // 检测是否在移动（水平移动）
             isMoving = move.length() > 0;
             moveVelocity.lerp(move, 0.1);
+
+            // 跳跃物理
+            const gravity = -0.012; // 重力加速度
+            if (!gameState.isGrounded) {
+                gameState.jumpVelocity += gravity * (60 * delta);
+                const newY = playerBody.position.y + gameState.jumpVelocity * (60 * delta);
+
+                // 检查是否着地 (y = 1.6 是站立高度)
+                if (newY <= 1.6) {
+                    playerBody.position.y = 1.6;
+                    camera.position.y = 1.6;
+                    gameState.jumpVelocity = 0;
+                    gameState.isGrounded = true;
+                    gameState.isJumping = false;
+                } else {
+                    playerBody.position.y = newY;
+                    camera.position.y = newY;
+                }
+            }
 
             if (isMoving) {
                 move.normalize().multiplyScalar(speed);
@@ -2108,6 +2145,9 @@
             gameState.isSprinting = false;
             gameState.isADS = false;
             gameState.isFiring = false;
+            gameState.isJumping = false;
+            gameState.isGrounded = true;
+            gameState.jumpVelocity = 0;
             gameState.currentFOV = gameState.normalFOV;
             camera.fov = gameState.normalFOV;
             camera.updateProjectionMatrix();
@@ -2124,6 +2164,7 @@
             crosshairState.baseSpread = currentWeapon.spread.base;
             crosshairState.moveSpread = currentWeapon.spread.move;
             crosshairState.sprintSpread = currentWeapon.spread.sprint;
+            crosshairState.jumpSpreadMultiplier = 6;
             crosshairState.targetSpread = currentWeapon.spread.base;
 
             // 重置武器模型可见性
