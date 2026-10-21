@@ -2046,22 +2046,72 @@
             isMoving = move.length() > 0;
             moveVelocity.lerp(move, 0.1);
 
-            // 跳跃物理
+            // 跳跃物理 - 使用射线检测着地
             const gravity = -0.012; // 重力加速度
             if (!gameState.isGrounded) {
                 gameState.jumpVelocity += gravity * (60 * delta);
                 const newY = playerBody.position.y + gameState.jumpVelocity * (60 * delta);
 
-                // 检查是否着地 (y = 1.6 是站立高度)
-                if (newY <= 1.6) {
-                    playerBody.position.y = 1.6;
-                    camera.position.y = 1.6;
+                // 向下射线检测平台/地面
+                const rayOrigin = new THREE.Vector3(playerBody.position.x, playerBody.position.y + 0.5, playerBody.position.z);
+                const rayDir = new THREE.Vector3(0, -1, 0);
+                const groundRaycaster = new THREE.Raycaster(rayOrigin, rayDir, 0, 5);
+                const groundHits = groundRaycaster.intersectObjects(obstacles, true);
+
+                // 找到最近的可站立表面（水平面）
+                let groundY = 1.6; // 默认地面高度
+                let hitPlatform = false;
+
+                if (groundHits.length > 0) {
+                    for (const hit of groundHits) {
+                        // 检查法线是否向上（可站立的表面）
+                        if (hit.face && hit.face.normal.y > 0.7) {
+                            groundY = hit.point.y + 0.9; // 玩家胶囊体中心到脚底的距离
+                            hitPlatform = true;
+                            break;
+                        }
+                    }
+                }
+
+                // 检查是否着地
+                if (newY <= groundY) {
+                    playerBody.position.y = groundY;
+                    camera.position.y = groundY;
                     gameState.jumpVelocity = 0;
                     gameState.isGrounded = true;
                     gameState.isJumping = false;
                 } else {
                     playerBody.position.y = newY;
                     camera.position.y = newY;
+                }
+            } else {
+                // 已经着地时，检查脚下是否还有支撑（防止走下平台时悬空）
+                const rayOrigin = new THREE.Vector3(playerBody.position.x, playerBody.position.y + 0.5, playerBody.position.z);
+                const rayDir = new THREE.Vector3(0, -1, 0);
+                const groundRaycaster = new THREE.Raycaster(rayOrigin, rayDir, 0, 2);
+                const groundHits = groundRaycaster.intersectObjects(obstacles, true);
+
+                let hasGround = false;
+                let groundY = 1.6;
+
+                if (groundHits.length > 0) {
+                    for (const hit of groundHits) {
+                        if (hit.face && hit.face.normal.y > 0.7) {
+                            groundY = hit.point.y + 0.9;
+                            hasGround = true;
+                            break;
+                        }
+                    }
+                }
+
+                // 如果脚下没有支撑且不在默认地面高度，开始下落
+                if (!hasGround && playerBody.position.y > 1.61) {
+                    gameState.isGrounded = false;
+                    gameState.jumpVelocity = 0;
+                } else if (hasGround && Math.abs(playerBody.position.y - groundY) < 0.1) {
+                    // 修正高度到平台表面
+                    playerBody.position.y = groundY;
+                    camera.position.y = groundY;
                 }
             }
 
