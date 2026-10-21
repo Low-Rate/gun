@@ -373,8 +373,8 @@
             lastShot: 0,
             isReloading: false,
             reloadStartTime: 0,
-            moveSpeed: 0.14,  // 降低基础速度
-            sprintMultiplier: 1.8,  // 降低冲刺倍率
+            moveSpeed: 0.1,   // 更慢的基础速度
+            sprintMultiplier: 1.5,  // 更慢的冲刺倍率
             isSprinting: false,
             isADS: false,           // 开镜状态
             adsFOV: 40,             // 开镜FOV
@@ -768,7 +768,11 @@
                 metalness: 0.4
             });
 
-            for (let i = 0; i < 20; i++) {
+            // 创建可跳跃上去的平台结构
+            createJumpPlatforms();
+
+            // 原有的随机障碍物（减少数量）
+            for (let i = 0; i < 12; i++) {
                 const type = Math.random();
                 let geo, mesh;
 
@@ -805,6 +809,118 @@
                 scene.add(mesh);
                 obstacles.push(mesh);
             }
+        }
+
+        // 创建可跳跃的平台/建筑结构
+        function createJumpPlatforms() {
+            const platformMat = new THREE.MeshStandardMaterial({
+                color: 0x2a3a5e,
+                roughness: 0.5,
+                metalness: 0.3
+            });
+
+            const platforms = [
+                // 中央区域 - 多层平台
+                { pos: [0, 1.5, 0], scale: [8, 1, 8], height: 1.5 },      // 低平台
+                { pos: [0, 3.5, 0], scale: [6, 1, 6], height: 3.5 },      // 中平台
+                { pos: [0, 5.5, 0], scale: [4, 1, 4], height: 5.5 },      // 高平台
+
+                // 四角平台
+                { pos: [-20, 2, -20], scale: [6, 1, 6], height: 2 },
+                { pos: [20, 2, -20], scale: [6, 1, 6], height: 2 },
+                { pos: [-20, 2, 20], scale: [6, 1, 6], height: 2 },
+                { pos: [20, 2, 20], scale: [6, 1, 6], height: 2 },
+
+                // 中距离平台 - 连跳路径
+                { pos: [-15, 1.5, 15], scale: [5, 1, 5], height: 1.5 },
+                { pos: [15, 1.5, -15], scale: [5, 1, 5], height: 1.5 },
+                { pos: [-15, 3, 0], scale: [4, 1, 4], height: 3 },
+                { pos: [15, 3, 0], scale: [4, 1, 4], height: 3 },
+
+                // 长条形平台 - 适合跑酷
+                { pos: [-30, 2, 0], scale: [12, 1, 4], height: 2 },
+                { pos: [30, 2, 0], scale: [12, 1, 4], height: 2 },
+                { pos: [0, 2, -30], scale: [4, 1, 12], height: 2 },
+                { pos: [0, 2, 30], scale: [4, 1, 12], height: 2 },
+
+                // 阶梯状结构
+                { pos: [-25, 1.5, -25], scale: [3, 1, 3], height: 1.5 },
+                { pos: [-25, 3, -22], scale: [3, 1, 3], height: 3 },
+                { pos: [-25, 4.5, -19], scale: [3, 1, 3], height: 4.5 },
+                { pos: [25, 1.5, 25], scale: [3, 1, 3], height: 1.5 },
+                { pos: [25, 3, 22], scale: [3, 1, 3], height: 3 },
+                { pos: [25, 4.5, 19], scale: [3, 1, 3], height: 4.5 },
+
+                // 墙边平台
+                { pos: [-40, 2, -10], scale: [8, 1, 4], height: 2 },
+                { pos: [40, 2, 10], scale: [8, 1, 4], height: 2 },
+                { pos: [-10, 2, -40], scale: [4, 1, 8], height: 2 },
+                { pos: [10, 2, 40], scale: [4, 1, 8], height: 2 },
+            ];
+
+            platforms.forEach(p => {
+                const geo = new THREE.BoxGeometry(...p.scale);
+                const mesh = new THREE.Mesh(geo, platformMat);
+                mesh.position.set(...p.pos);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                obstacles.push(mesh);
+
+                // 添加边缘标记（可选：发光边缘）
+                const edgeGeo = new THREE.BoxGeometry(p.scale[0] + 0.1, 0.15, p.scale[2] + 0.1);
+                const edgeMat = new THREE.MeshBasicMaterial({
+                    color: 0x00ff88,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const edge = new THREE.Mesh(edgeGeo, edgeMat);
+                edge.position.set(p.pos[0], p.pos[1] + p.scale[1] / 2 + 0.075, p.pos[2]);
+                scene.add(edge);
+            });
+
+            // 创建坡道/斜坡（辅助跳跃）
+            createRamps();
+        }
+
+        // 创建坡道
+        function createRamps() {
+            const rampMat = new THREE.MeshStandardMaterial({
+                color: 0x3a4a6e,
+                roughness: 0.5,
+                metalness: 0.3
+            });
+
+            const ramps = [
+                // 中央平台的坡道
+                { pos: [4.5, 0.75, 0], rot: [-Math.PI / 6, 0, 0], scale: [4, 0.5, 3] },
+                { pos: [-4.5, 0.75, 0], rot: [Math.PI / 6, 0, 0], scale: [4, 0.5, 3] },
+                { pos: [0, 0.75, 4.5], rot: [0, 0, -Math.PI / 6], scale: [3, 0.5, 4] },
+                { pos: [0, 0.75, -4.5], rot: [0, 0, Math.PI / 6], scale: [3, 0.5, 4] },
+
+                // 二层平台坡道
+                { pos: [3.5, 2.25, 0], rot: [-Math.PI / 6, 0, 0], scale: [3, 0.5, 3] },
+                { pos: [-3.5, 2.25, 0], rot: [Math.PI / 6, 0, 0], scale: [3, 0.5, 3] },
+                { pos: [0, 2.25, 3.5], rot: [0, 0, -Math.PI / 6], scale: [3, 0.5, 3] },
+                { pos: [0, 2.25, -3.5], rot: [0, 0, Math.PI / 6], scale: [3, 0.5, 3] },
+
+                // 四角平台坡道
+                { pos: [-17, 1, -20], rot: [0, Math.PI / 4, -Math.PI / 8], scale: [4, 0.5, 3] },
+                { pos: [17, 1, -20], rot: [0, -Math.PI / 4, -Math.PI / 8], scale: [4, 0.5, 3] },
+                { pos: [-17, 1, 20], rot: [0, Math.PI / 4, Math.PI / 8], scale: [4, 0.5, 3] },
+                { pos: [17, 1, 20], rot: [0, -Math.PI / 4, Math.PI / 8], scale: [4, 0.5, 3] },
+            ];
+
+            ramps.forEach(r => {
+                const geo = new THREE.BoxGeometry(...r.scale);
+                const mesh = new THREE.Mesh(geo, rampMat);
+                mesh.position.set(...r.pos);
+                mesh.rotation.set(...r.rot);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                obstacles.push(mesh);
+            });
         }
 
         function createAmbientParticles() {
