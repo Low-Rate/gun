@@ -460,14 +460,15 @@
             {
                 id: 'lmg',
                 name: '轻机枪',
-                spread: { base: 12, move: 28, sprint: 45 },
-                adsSpread: 5,
+                spread: { base: 20, move: 40, sprint: 60 },
+                adsSpread: 8,
                 damageMultiplier: 1.3,
                 fireRate: 90,
                 maxAmmo: 100,
-                reloadTime: 4000,
-                recoil: { x: 0.025, y: 0.04 },
-                color: '#ff6600'
+                reloadTime: 5000,
+                recoil: { x: 0.03, y: 0.05 },
+                color: '#ff6600',
+                moveSpeedMultiplier: 0.6 // 拿着轻机枪移动速度减少40%
             }
         ];
 
@@ -698,6 +699,9 @@
             gameState.reloadTime = currentWeapon.reloadTime;
             gameState.maxAmmo = currentWeapon.maxAmmo;
             gameState.ammo = weaponAmmo[currentWeaponIndex];
+
+            // 应用武器移动速度倍率（轻机枪减速）
+            gameState.moveSpeedMultiplier = currentWeapon.moveSpeedMultiplier || 1.0;
 
             // 重置散布
             crosshairState.baseSpread = currentWeapon.spread.base;
@@ -1317,8 +1321,8 @@
                     reload();
                 }
 
-                // 武器切换 1-4
-                if (['1', '2', '3', '4'].includes(key) && !gameState.isReloading) {
+                // 武器切换 1-5
+                if (['1', '2', '3', '4', '5'].includes(key) && !gameState.isReloading) {
                     const weaponIndex = parseInt(key) - 1;
                     if (weaponIndex < WEAPONS.length) {
                         switchWeapon(weaponIndex);
@@ -1352,8 +1356,8 @@
 
             document.addEventListener('mousedown', (e) => {
                 if (e.button === 0 && controls.isLocked && !gameState.isGameOver) {
-                    // 步枪和冲锋枪支持连发
-                    if (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg') {
+                    // 步枪、冲锋枪、轻机枪支持连发
+                    if (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg' || currentWeapon.id === 'lmg') {
                         gameState.isFiring = true;
                     } else {
                         shoot();
@@ -2040,7 +2044,7 @@
         function updateMovement(delta) {
             if (gameState.isPaused || gameState.isGameOver || !controls.isLocked) return;
 
-            const speed = gameState.moveSpeed * (gameState.isSprinting ? gameState.sprintMultiplier : 1);
+            const speed = gameState.moveSpeed * (gameState.isSprinting ? gameState.sprintMultiplier : 1) * (gameState.moveSpeedMultiplier || 1.0);
             const forward = new THREE.Vector3();
             camera.getWorldDirection(forward);
             forward.y = 0;
@@ -2332,6 +2336,9 @@
             camera.updateProjectionMatrix();
             updateSprintIndicator();
 
+            // 重置移动速度倍率
+            gameState.moveSpeedMultiplier = 1.0;
+
             // 重置武器状态
             currentWeaponIndex = 0;
             currentWeapon = WEAPONS[0];
@@ -2400,8 +2407,8 @@
                 updateMovement(delta);
                 updateTargets(delta);
 
-                // 连发逻辑：步枪和冲锋枪按住左键持续射击
-                if (gameState.isFiring && (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg')) {
+                // 连发逻辑：步枪、冲锋枪、轻机枪按住左键持续射击
+                if (gameState.isFiring && (currentWeapon.id === 'rifle' || currentWeapon.id === 'smg' || currentWeapon.id === 'lmg')) {
                     if (now - gameState.lastShot >= gameState.fireRate) {
                         shoot();
                     }
