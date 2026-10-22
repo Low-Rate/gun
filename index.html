@@ -297,6 +297,122 @@
         .difficulty-btn[data-difficulty="normal"]:hover { border-color: #00ccff; }
         .difficulty-btn[data-difficulty="hard"]:hover { border-color: #ffaa00; }
         .difficulty-btn[data-difficulty="expert"]:hover { border-color: #ff3333; }
+
+        /* 装备选择菜单 */
+        #loadout-menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 20, 0.98);
+            border: 2px solid #00ff88;
+            border-radius: 15px;
+            padding: 30px;
+            pointer-events: auto;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.4);
+            z-index: 100;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #loadout-menu h1 {
+            color: #00ff88;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px #00ff88;
+            font-size: 32px;
+        }
+        #loadout-desc {
+            color: #888;
+            margin-bottom: 25px;
+            font-size: 16px;
+        }
+        #loadout-weapons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .loadout-category {
+            background: rgba(20, 20, 40, 0.6);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .loadout-category-title {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        .loadout-weapon-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .loadout-weapon-btn {
+            background: rgba(30, 30, 50, 0.9);
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 12px 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #fff;
+            text-align: left;
+            width: 100%;
+        }
+        .loadout-weapon-btn:hover {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+            transform: translateX(5px);
+        }
+        .loadout-weapon-btn.selected {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+        .loadout-weapon-name {
+            font-weight: bold;
+            font-size: 16px;
+            min-width: 120px;
+        }
+        .loadout-weapon-stats {
+            flex: 1;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .loadout-select-indicator {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ff88;
+            min-width: 30px;
+            text-align: center;
+        }
+        #loadout-confirm-btn {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #000;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #loadout-confirm-btn:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        #loadout-confirm-btn:not(:disabled):hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 25px #00ff88;
+        }
     </style>
 </head>
 <body>
@@ -349,6 +465,13 @@
             </div>
         </div>
     </div>
+    <!-- 装备选择菜单 -->
+    <div id="loadout-menu">
+        <h1>选择装备</h1>
+        <p id="loadout-desc">从以下武器中选择 5 种携带进入游戏</p>
+        <div id="loadout-weapons-container"></div>
+        <button id="loadout-confirm-btn" disabled>请选择 5 种武器 (0/5)</button>
+    </div>
 
     <script type="importmap">
     {
@@ -391,7 +514,10 @@
                 hard: { targetHealth: 5, speedMin: 0.8, speedMax: 3.0, targetCount: 12, scoreMultiplier: 1.5 },
                 expert: { targetHealth: 8, speedMin: 1.2, speedMax: 4.0, targetCount: 15, scoreMultiplier: 2.0 }
             },
-            showDifficultyMenu: true // 是否显示难度选择菜单
+            showDifficultyMenu: true, // 是否显示难度选择菜单
+            showLoadoutMenu: false, // 是否显示装备选择菜单
+            selectedLoadout: ['rifle', 'smg', 'sniper', 'shotgun', 'lmg'], // 默认携带武器
+            loadoutConfirmed: false // 装备是否已确认
         };
 
         // 准星散布状态
@@ -417,7 +543,8 @@
                 maxAmmo: 30,
                 reloadTime: 2000,
                 recoil: { x: 0.02, y: 0.03 },
-                color: '#00ff88'
+                color: '#00ff88',
+                category: 'assault'
             },
             {
                 id: 'smg',
@@ -429,7 +556,8 @@
                 maxAmmo: 50,
                 reloadTime: 1500,
                 recoil: { x: 0.015, y: 0.02 },
-                color: '#0088ff'
+                color: '#0088ff',
+                category: 'smg'
             },
             {
                 id: 'sniper',
@@ -441,7 +569,8 @@
                 maxAmmo: 5,
                 reloadTime: 3000,
                 recoil: { x: 0.04, y: 0.06 },
-                color: '#ff0066'
+                color: '#ff0066',
+                category: 'sniper'
             },
             {
                 id: 'shotgun',
@@ -455,7 +584,8 @@
                 recoil: { x: 0.03, y: 0.05 },
                 color: '#ffaa00',
                 pellets: 8,
-                pelletSpread: 8
+                pelletSpread: 8,
+                category: 'shotgun'
             },
             {
                 id: 'lmg',
@@ -468,7 +598,115 @@
                 reloadTime: 5000,
                 recoil: { x: 0.03, y: 0.05 },
                 color: '#ff6600',
-                moveSpeedMultiplier: 0.6 // 拿着轻机枪移动速度减少40%
+                moveSpeedMultiplier: 0.6, // 拿着轻机枪移动速度减少40%
+                category: 'lmg'
+            },
+            // === 新增武器 ===
+            {
+                id: 'pistol',
+                name: '手枪',
+                spread: { base: 2, move: 8, sprint: 15 },
+                adsSpread: 1,
+                damageMultiplier: 0.8,
+                fireRate: 200,
+                maxAmmo: 15,
+                reloadTime: 1200,
+                recoil: { x: 0.01, y: 0.015 },
+                color: '#8888ff',
+                category: 'sidearm'
+            },
+            {
+                id: 'heavy_pistol',
+                name: '大口径手枪',
+                spread: { base: 3, move: 10, sprint: 18 },
+                adsSpread: 1.5,
+                damageMultiplier: 1.5,
+                fireRate: 350,
+                maxAmmo: 7,
+                reloadTime: 1500,
+                recoil: { x: 0.025, y: 0.04 },
+                color: '#aa44ff',
+                category: 'sidearm'
+            },
+            {
+                id: 'pdw',
+                name: '个人防卫武器',
+                spread: { base: 4, move: 14, sprint: 22 },
+                adsSpread: 2,
+                damageMultiplier: 0.45,
+                fireRate: 45,
+                maxAmmo: 40,
+                reloadTime: 1300,
+                recoil: { x: 0.012, y: 0.018 },
+                color: '#00aaff',
+                category: 'smg'
+            },
+            {
+                id: 'carbine',
+                name: '卡宾枪',
+                spread: { base: 5, move: 16, sprint: 30 },
+                adsSpread: 2,
+                damageMultiplier: 0.9,
+                fireRate: 100,
+                maxAmmo: 30,
+                reloadTime: 1800,
+                recoil: { x: 0.018, y: 0.025 },
+                color: '#44ff88',
+                category: 'assault'
+            },
+            {
+                id: 'battle_rifle',
+                name: '战斗步枪',
+                spread: { base: 8, move: 22, sprint: 38 },
+                adsSpread: 3,
+                damageMultiplier: 1.8,
+                fireRate: 250,
+                maxAmmo: 20,
+                reloadTime: 2200,
+                recoil: { x: 0.035, y: 0.05 },
+                color: '#ff8800',
+                category: 'assault'
+            },
+            {
+                id: 'dmr',
+                name: '精确射手步枪',
+                spread: { base: 6, move: 18, sprint: 32 },
+                adsSpread: 0.5,
+                damageMultiplier: 2.2,
+                fireRate: 300,
+                maxAmmo: 10,
+                reloadTime: 2500,
+                recoil: { x: 0.02, y: 0.03 },
+                color: '#ffcc00',
+                category: 'marksman'
+            },
+            {
+                id: 'anti_material',
+                name: '反器材步枪',
+                spread: { base: 25, move: 45, sprint: 65 },
+                adsSpread: 0,
+                damageMultiplier: 8.0,
+                fireRate: 2000,
+                maxAmmo: 5,
+                reloadTime: 4000,
+                recoil: { x: 0.08, y: 0.12 },
+                color: '#ff0000',
+                category: 'sniper'
+            },
+            {
+                id: 'auto_shotgun',
+                name: '自动霰弹枪',
+                spread: { base: 18, move: 38, sprint: 52 },
+                adsSpread: 12,
+                damageMultiplier: 0.25,
+                fireRate: 200,
+                maxAmmo: 12,
+                reloadTime: 3000,
+                recoil: { x: 0.04, y: 0.06 },
+                color: '#ff8844',
+                category: 'shotgun',
+                pellets: 6,
+                pelletSpread: 10
             }
         ];
 
@@ -539,6 +777,116 @@
             gameState.showDifficultyMenu = false;
 
             const menu = document.getElementById('difficulty-menu');
+            menu.style.display = 'none';
+
+            // 显示装备选择菜单
+            showLoadoutMenu();
+        }
+
+        function showLoadoutMenu() {
+            const menu = document.getElementById('loadout-menu');
+            menu.style.display = 'block';
+            gameState.showLoadoutMenu = true;
+
+            // 渲染武器选择列表
+            renderLoadoutWeapons();
+
+            // 添加武器点击事件
+            document.querySelectorAll('.loadout-weapon-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toggleWeaponInLoadout(btn.dataset.weaponId, btn);
+                });
+            });
+
+            // 确认按钮
+            const confirmBtn = document.getElementById('loadout-confirm-btn');
+            confirmBtn.onclick = () => confirmLoadout();
+        }
+
+        function renderLoadoutWeapons() {
+            const container = document.getElementById('loadout-weapons-container');
+            container.innerHTML = '';
+
+            const categories = [
+                { id: 'sidearm', name: '副武器', color: '#8888ff' },
+                { id: 'smg', name: '冲锋枪', color: '#0088ff' },
+                { id: 'assault', name: '突击步枪', color: '#00ff88' },
+                { id: 'marksman', name: '精确射手', color: '#ffcc00' },
+                { id: 'sniper', name: '狙击枪', color: '#ff0066' },
+                { id: 'shotgun', name: '霰弹枪', color: '#ffaa00' },
+                { id: 'lmg', name: '轻机枪', color: '#ff6600' }
+            ];
+
+            const selected = new Set(gameState.selectedLoadout);
+
+            categories.forEach(cat => {
+                const catWeapons = WEAPONS.filter(w => w.category === cat.id);
+                if (catWeapons.length === 0) return;
+
+                const catDiv = document.createElement('div');
+                catDiv.className = 'loadout-category';
+                catDiv.innerHTML = `
+                    <h3 class="loadout-category-title" style="color: ${cat.color};">${cat.name}</h3>
+                    <div class="loadout-weapon-list"></div>
+                `;
+
+                const list = catDiv.querySelector('.loadout-weapon-list');
+                catWeapons.forEach(weapon => {
+                    const isSelected = selected.has(weapon.id);
+                    const btn = document.createElement('button');
+                    btn.className = 'loadout-weapon-btn' + (isSelected ? ' selected' : '');
+                    btn.dataset.weaponId = weapon.id;
+                    btn.innerHTML = `
+                        <span class="loadout-weapon-name">${weapon.name}</span>
+                        <span class="loadout-weapon-stats">弹药: ${weapon.maxAmmo} | 射速: ${weapon.fireRate}ms | 伤害: ${weapon.damageMultiplier}x</span>
+                        <span class="loadout-select-indicator">${isSelected ? '✓' : '+'}</span>
+                    `;
+                    list.appendChild(btn);
+                });
+
+                container.appendChild(catDiv);
+            });
+
+            updateLoadoutConfirmButton();
+        }
+
+        function toggleWeaponInLoadout(weaponId, btn) {
+            const selected = new Set(gameState.selectedLoadout);
+            const isSelected = selected.has(weaponId);
+
+            if (isSelected) {
+                selected.delete(weaponId);
+                btn.classList.remove('selected');
+                btn.querySelector('.loadout-select-indicator').textContent = '+';
+            } else {
+                if (selected.size >= 5) {
+                    // 已满5个，提示
+                    alert('最多只能选择5种武器');
+                    return;
+                }
+                selected.add(weaponId);
+                btn.classList.add('selected');
+                btn.querySelector('.loadout-select-indicator').textContent = '✓';
+            }
+
+            gameState.selectedLoadout = Array.from(selected);
+            updateLoadoutConfirmButton();
+        }
+
+        function updateLoadoutConfirmButton() {
+            const confirmBtn = document.getElementById('loadout-confirm-btn');
+            const count = gameState.selectedLoadout.length;
+            confirmBtn.disabled = count !== 5;
+            confirmBtn.textContent = count === 5 ? '确认并开始游戏' : `请选择 5 种武器 (${count}/5)`;
+        }
+
+        function confirmLoadout() {
+            if (gameState.selectedLoadout.length !== 5) return;
+
+            gameState.loadoutConfirmed = true;
+            gameState.showLoadoutMenu = false;
+
+            const menu = document.getElementById('loadout-menu');
             menu.style.display = 'none';
 
             // 初始化靶子和开始游戏
@@ -612,22 +960,55 @@
                     smg: 0x0d1a2e,
                     sniper: 0x1a0d1a,
                     shotgun: 0x1a1a0d,
-                    lmg: 0x1a1a0a
+                    lmg: 0x1a1a0a,
+                    pistol: 0x0d0d1a,
+                    heavy_pistol: 0x0a0a1a,
+                    pdw: 0x0d1a1a,
+                    carbine: 0x1a1a0d,
+                    battle_rifle: 0x1a0d0d,
+                    dmr: 0x1a1a0a,
+                    anti_material: 0x1a0a0a,
+                    auto_shotgun: 0x1a0a1a
                 };
 
-                const gunBodyGeo = new THREE.BoxGeometry(0.08, 0.12, 0.65); // LMG更长的枪身
+                // 不同武器不同枪身尺寸
+                const bodySizes = {
+                    pistol: [0.06, 0.1, 0.3],
+                    heavy_pistol: [0.07, 0.11, 0.35],
+                    pdw: [0.07, 0.11, 0.45],
+                    carbine: [0.08, 0.12, 0.5],
+                    rifle: [0.08, 0.12, 0.5],
+                    battle_rifle: [0.09, 0.13, 0.55],
+                    dmr: [0.08, 0.12, 0.55],
+                    sniper: [0.08, 0.12, 0.55],
+                    anti_material: [0.1, 0.15, 0.7],
+                    shotgun: [0.08, 0.12, 0.5],
+                    auto_shotgun: [0.09, 0.13, 0.55],
+                    lmg: [0.08, 0.12, 0.65]
+                };
+
+                const bodySize = bodySizes[weapon.id] || [0.08, 0.12, 0.5];
+                const gunBodyGeo = new THREE.BoxGeometry(...bodySize);
                 const gunBodyMat = new THREE.MeshStandardMaterial({
                     color: gunColors[weapon.id] || 0x1a1a2e,
                     metalness: 0.8,
                     roughness: 0.2
                 });
                 const gunBody = new THREE.Mesh(gunBodyGeo, gunBodyMat);
-                gunBody.position.set(0.25, -0.15, -0.55);
+                gunBody.position.set(0.25, -0.15, -bodySize[2] / 2 - 0.05);
                 gunGroup.add(gunBody);
 
                 // 枪管 - 不同武器不同长度
-                const barrelLengths = { rifle: 0.4, smg: 0.25, sniper: 0.6, shotgun: 0.35, lmg: 0.5 };
-                const barrelRadius = { rifle: 0.03, smg: 0.025, sniper: 0.035, shotgun: 0.04, lmg: 0.035 };
+                const barrelLengths = {
+                    rifle: 0.4, smg: 0.25, sniper: 0.6, shotgun: 0.35, lmg: 0.5,
+                    pistol: 0.15, heavy_pistol: 0.2, pdw: 0.25, carbine: 0.35,
+                    battle_rifle: 0.45, dmr: 0.5, anti_material: 0.65, auto_shotgun: 0.4
+                };
+                const barrelRadius = {
+                    rifle: 0.03, smg: 0.025, sniper: 0.035, shotgun: 0.04, lmg: 0.035,
+                    pistol: 0.02, heavy_pistol: 0.025, pdw: 0.022, carbine: 0.028,
+                    battle_rifle: 0.032, dmr: 0.03, anti_material: 0.045, auto_shotgun: 0.038
+                };
                 const barrelGeo = new THREE.CylinderGeometry(
                     barrelRadius[weapon.id] || 0.03,
                     barrelRadius[weapon.id] || 0.03,
@@ -641,7 +1022,7 @@
                 });
                 const barrel = new THREE.Mesh(barrelGeo, barrelMat);
                 barrel.rotation.x = Math.PI / 2;
-                barrel.position.set(0.25, -0.15, -0.5 - (barrelLengths[weapon.id] || 0.4) / 2 - 0.1);
+                barrel.position.set(0.25, -0.15, -bodySize[2] / 2 - 0.05 - (barrelLengths[weapon.id] || 0.4) / 2 - 0.1);
                 gunGroup.add(barrel);
 
                 // 准星
@@ -676,9 +1057,12 @@
             muzzleFlash = muzzleFlashes[currentWeaponIndex];
         }
 
-        // 切换武器
+        // 切换武器 - 仅在装备栏中循环
         function switchWeapon(index) {
-            if (index < 0 || index >= WEAPONS.length || index === currentWeaponIndex) return;
+            if (!gameState.loadoutConfirmed) return; // 装备未确认时不允许切换
+
+            const loadoutWeapons = gameState.selectedLoadout;
+            if (index < 0 || index >= loadoutWeapons.length || index === currentWeaponIndex) return;
 
             // 切换武器时退出开镜
             if (gameState.isADS) {
@@ -686,19 +1070,23 @@
             }
 
             // 隐藏当前武器
-            weaponGroups[currentWeaponIndex].visible = false;
+            const oldWeaponId = WEAPONS[currentWeaponIndex].id;
+            const oldWeaponIdx = WEAPONS.findIndex(w => w.id === oldWeaponId);
+            weaponGroups[oldWeaponIdx].visible = false;
 
             // 显示新武器
             currentWeaponIndex = index;
-            currentWeapon = WEAPONS[currentWeaponIndex];
-            weaponGroups[currentWeaponIndex].visible = true;
-            muzzleFlash = muzzleFlashes[currentWeaponIndex];
+            const newWeaponId = loadoutWeapons[currentWeaponIndex];
+            const newWeaponIdx = WEAPONS.findIndex(w => w.id === newWeaponId);
+            currentWeapon = WEAPONS[newWeaponIdx];
+            weaponGroups[newWeaponIdx].visible = true;
+            muzzleFlash = muzzleFlashes[newWeaponIdx];
 
             // 更新游戏状态使用新武器的参数
             gameState.fireRate = currentWeapon.fireRate;
             gameState.reloadTime = currentWeapon.reloadTime;
             gameState.maxAmmo = currentWeapon.maxAmmo;
-            gameState.ammo = weaponAmmo[currentWeaponIndex];
+            gameState.ammo = weaponAmmo[newWeaponIdx];
 
             // 应用武器移动速度倍率（轻机枪减速）
             gameState.moveSpeedMultiplier = currentWeapon.moveSpeedMultiplier || 1.0;
@@ -713,18 +1101,25 @@
             updateAmmoUI();
         }
 
-        // 更新武器 HUD
+        // 更新武器 HUD - 仅显示装备栏武器
         function updateWeaponHUD() {
             const hud = document.getElementById('weapon-hud');
             hud.innerHTML = '';
 
-            WEAPONS.forEach((weapon, index) => {
+            if (!gameState.loadoutConfirmed) return;
+
+            const loadoutWeapons = gameState.selectedLoadout;
+            loadoutWeapons.forEach((weaponId, index) => {
+                const weapon = WEAPONS.find(w => w.id === weaponId);
+                if (!weapon) return;
+
+                const weaponIdx = WEAPONS.findIndex(w => w.id === weaponId);
                 const slot = document.createElement('div');
                 slot.className = 'weapon-slot' + (index === currentWeaponIndex ? ' active' : '');
                 slot.innerHTML = `
                     <span class="weapon-slot-number">${index + 1}</span>
                     <span class="weapon-slot-name">${weapon.name}</span>
-                    <span class="weapon-slot-ammo">${weaponAmmo[index]} / ${weapon.maxAmmo}</span>
+                    <span class="weapon-slot-ammo">${weaponAmmo[weaponIdx]} / ${weapon.maxAmmo}</span>
                 `;
                 hud.appendChild(slot);
             });
@@ -1332,6 +1727,15 @@
                 if (key === 'escape') {
                     if (controls.isLocked) controls.unlock();
                 }
+
+                // 数字键 1-5 切换武器 - 仅在装备栏中
+                if (['1', '2', '3', '4', '5'].includes(key) && !gameState.isReloading && gameState.loadoutConfirmed) {
+                    const weaponIndex = parseInt(key) - 1;
+                    const loadoutLength = gameState.selectedLoadout.length;
+                    if (weaponIndex < loadoutLength) {
+                        switchWeapon(weaponIndex);
+                    }
+                }
                 // 空格跳跃
                 if (key === ' ' && gameState.isGrounded && controls.isLocked && !gameState.isGameOver) {
                     gameState.isJumping = true;
@@ -1345,12 +1749,13 @@
                 if (key in keys) keys[key] = false;
             });
 
-            // 鼠标滚轮切换武器
+            // 鼠标滚轮切换武器 - 仅在装备栏中循环
             document.addEventListener('wheel', (e) => {
-                if (!controls.isLocked || gameState.isReloading) return;
+                if (!controls.isLocked || gameState.isReloading || !gameState.loadoutConfirmed) return;
                 e.preventDefault();
+                const loadoutLength = gameState.selectedLoadout.length;
                 const newIndex = currentWeaponIndex + (e.deltaY > 0 ? 1 : -1);
-                const wrappedIndex = (newIndex + WEAPONS.length) % WEAPONS.length;
+                const wrappedIndex = (newIndex + loadoutLength) % loadoutLength;
                 switchWeapon(wrappedIndex);
             }, { passive: false });
 
@@ -2338,6 +2743,11 @@
 
             // 重置移动速度倍率
             gameState.moveSpeedMultiplier = 1.0;
+
+            // 重置装备选择（可选择是否保留装备，这里重置为默认）
+            gameState.selectedLoadout = ['rifle', 'smg', 'sniper', 'shotgun', 'lmg'];
+            gameState.loadoutConfirmed = false;
+            gameState.showLoadoutMenu = false;
 
             // 重置武器状态
             currentWeaponIndex = 0;
